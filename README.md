@@ -1,16 +1,121 @@
-# Final Project
+# ZN Roll Liquidity: When Should You Roll a 10-Year Treasury Futures Position?
+ 
+This repository contains our team's final project: an analysis of how trading liquidity migrates from the expiring 10-Year U.S. Treasury Note futures contract (**ZN**) to the next contract during each quarterly roll, whether that migration can be predicted, and whether predicting it lowers the cost of rolling a position.
+ 
+All market data comes from **Databento's CME Globex MDP 3.0 dataset (`GLBX.MDP3`)**.
+ 
+> **Status:** Planning (Week 1). The goals, data plan, and run instructions below describe what we intend to build. Commands marked *(planned)* do not exist yet and will be implemented through the repository's open Issues.
 
-This repository contains our team's final project.
+---
 
-## Project Overview
-
-Our team is currently in the project planning and design phase. We are evaluating potential project ideas and will update this section once the final project topic and objectives have been selected.
 
 ## Team Roles
 
 - **Tech Leader:** Jacob Lerner
 - **Communication Leader:** TBD
-- **Design Leader(s):** Zheng Guo
+- **Design Leader(s):** Zheng Guo, Christo Karahalios
+
+---
+## Project Overview
+
+### Motivation
+ 
+Treasury futures are physically delivered. A trader who is long a contract on **First Position Day** can be assigned delivery, so nearly every position holder moves ("rolls") into the next quarterly contract beforehand. Each March, June, September, and December, this creates a short window in which volume, open interest, and quoted liquidity shift from the front contract to the deferred contract, mostly through the calendar spread market.
+ 
+The timing of that shift matters to anyone holding a futures position:
+ 
+- **Roll too early,** and you trade the deferred contract or the spread while it is still thin.
+- **Roll too late,** and you trade the front contract after liquidity has left, while also approaching delivery.
+
+
+### Research Questions
+ 
+1. **Describe:** For every ZN quarterly roll since 2010, how and when do volume, open interest, calendar-spread activity, and bid–ask liquidity move from the front contract to the next contract?
+2. **Predict:** Using only information available on a given day, can we predict when the liquidity crossover will happen, or how far it has progressed?
+3. **Execute:** Does timing a roll with our predictions reduce transaction costs compared with simple rules, such as rolling a fixed number of days before First Notice Day or rolling at the open interest crossover?
+
+### Scope
+ 
+We deliberately study **one product: ZN**. CME products differ in calendars, delivery rules, and market structure, and handling those differences would take time away from the analysis itself. If the ZN analysis is complete, we may compare against the Ultra 10-Year (TN) or other Treasury tenors as a stretch goal.
+
+---
+
+## Key Concepts
+ 
+| Term | Meaning in this project |
+|---|---|
+| **Front contract** | The expiring quarterly ZN contract (e.g., ZNZ6). |
+| **Next contract** | The following quarterly contract (e.g., ZNH7). |
+| **Calendar spread** | A CME-listed instrument that trades the front and next contracts together (e.g., `ZNZ6-ZNH7`). Most roll volume trades here. |
+| **First Notice Day (FND)** | The last business day of the month before the contract month. This is our main time anchor: every roll is measured in **business days relative to FND**. |
+| **First Position Day** | Two business days before the first business day of the contract month. Longs holding past this point may be assigned delivery. |
+| **Crossover** | The first day on which the next contract's share of combined volume (or open interest) exceeds 50%. |
+| **Roll cost** | The estimated cost of moving N contracts from front to next at a given time, either through the spread book or by trading each leg separately. |
+ 
+---
+
+## Planned Approach
+ 
+### 1. Data Collection
+ 
+All data is pulled from Databento's `GLBX.MDP3` dataset using the `databento` Python client.
+ 
+| Databento schema | Used for | History |
+|---|---|---|
+| `definition` | Instrument IDs, expirations, spread legs, tick sizes | Full |
+| `ohlcv-1d` | Daily volume and prices for outrights and spreads | Full (2010 onward) |
+| `ohlcv-1h` / `ohlcv-1m` | Intraday volume profile inside roll windows | Full, roll windows only |
+| `statistics` | Daily open interest and settlement prices | Full |
+| `bbo-1m` / `tbbo` / `mbp-1` | Top-of-book bid–ask and size during roll windows | As far back as our license allows |
+| `mbp-10` | Full depth for a single-roll case study | Most recent one to two months only (license limit) |
+ 
+Symbols are requested by parent (`ZN.FUT`), which returns both outright contracts and calendar spreads. Databento's continuous contracts `ZN.v.0` (volume-ranked) and `ZN.n.0` (open interest-ranked) serve as a reference roll schedule.
+ 
+Raw data is cached locally under `data/raw/` and is **not committed** to the repository.
+ 
+### 2. Roll Panel
+ 
+For each quarterly roll, we build a daily panel indexed by business days relative to FND (about −20 to +5). It includes:
+ 
+- Front and next contract volume and open interest
+- Next contract share of total volume and of total open interest
+- Calendar spread price, volume, and bid–ask spread
+- Bid–ask spread and top-of-book size for each outright
+- Business days to FND and to last trading day
+### 3. Exploratory Analysis and Visualization
+ 
+- All rolls overlaid on one chart: next contract share vs. days to FND
+- Crossover timing by year, compared against Databento's continuous-contract roll dates
+- Intraday volume and spread activity around the crossover
+### 4. Prediction Models
+ 
+Simple baselines come first, because the calendar alone likely explains most of the roll timing:
+ 
+- **Baselines:** roll a fixed N business days before FND; roll at the open interest crossover; roll on Databento's `ZN.v.0` switch date
+- **Bayesian hierarchical logistic curve:** each roll's volume-share path is modeled as an S-curve, with a midpoint and steepness drawn from a shared distribution across rolls
+- **Discrete-time hazard / survival model:** the probability that the crossover happens today, given it has not happened yet
+- **Gradient-boosted trees with quantile loss:** next-day liquidity and bad-case roll cost
+Every model is validated **by roll** (leave-one-roll-out or walk-forward), never by randomly shuffling days, so that information from a single roll cannot appear in both training and test data.
+ 
+### 5. Execution Backtest and Fat-Tail Evaluation
+ 
+We compare model-timed rolls against the baselines by the **distribution of roll costs**, not by how accurately each method predicts the crossover date. Because the sample is about 65 rolls and trading costs can be heavy-tailed, the evaluation draws on N. N. Taleb's *Statistical Consequences of Fat Tails*:
+ 
+- Tail diagnostics on roll-window data: kurtosis under aggregation, maximum-to-sum (MS) plots, and the kappa metric
+- Mean absolute deviation and upper quantiles of cost reported alongside averages
+- An estimate of how many rolls are needed before a difference in average cost can be trusted
+- A check of whether a handful of stressed rolls drive any measured improvement
+---
+ 
+## Expected Outputs
+ 
+- A reproducible pipeline that downloads ZN data from Databento and builds the roll panel
+- Figures describing liquidity migration across every roll from 2010 to 2026
+- Fitted prediction models with roll-level out-of-sample results
+- A roll-cost comparison table: model-timed vs. baseline roll rules
+- A short written summary of findings in `results/`
+---
+
 
 ## Repository Structure
 
