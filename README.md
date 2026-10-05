@@ -10,7 +10,7 @@ Our team is currently in the project planning and design phase. We are evaluatin
 
 - **Tech Leader:** Jacob Lerner
 - **Communication Leader:** TBD
-- **Design Leader(s):** TBD
+- **Design Leader(s):** Zheng Guo
 
 ## Repository Structure
 
