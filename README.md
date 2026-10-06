@@ -108,6 +108,22 @@ For each quarterly roll, we build a daily panel indexed by business days relativ
 - Crossover timing by year, compared against Databento's continuous-contract roll dates
 - Intraday volume and spread activity around the crossover
 ### 4. Prediction Models
+
+#### Prediction Target
+
+The primary prediction target is the timing of the volume-based liquidity crossover. For each trading day \(t\), define the next-contract volume share as
+
+$$
+S_t = \frac{V^{next}_t}{V^{front}_t + V^{next}_t}
+$$
+
+The realized crossover date is defined as the first trading day on which the next contract accounts for more than 50% of combined front- and next-contract volume.
+
+For predictive modeling, the problem is formulated dynamically. On each trading day before the realized crossover, the model estimates the probability that the crossover will occur within the next \(k\) business days using only information available as of that date.
+
+Open-interest crossover is treated separately as a secondary liquidity signal and benchmark rather than being combined with the primary volume-based target.
+
+#### Models
  
 Simple baselines come first, because the calendar alone likely explains most of the roll timing:
  
