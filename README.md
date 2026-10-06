@@ -11,9 +11,9 @@ All market data comes from **Databento's CME Globex MDP 3.0 dataset (`GLBX.MDP3`
 
 ## Team Roles
 
-- **Tech Leader:** Jacob Lerner
+- **Tech Leader:** Jacob Lerner (created initial README, skeleton of files and project/README outline, and technical workflow)
 - **Communication Leader:** TBD
-- **Design Leader(s):** Zheng Guo, Christo Karahalios
+- **Design Leader(s):** Zheng Guo, Christo Karahalios (Both updated project roadmap, design outline and issues)
 
 ---
 ## Project Overview
@@ -52,6 +52,26 @@ We deliberately study **one product: ZN**. CME products differ in calendars, del
 | **Crossover** | The first day on which the next contract's share of combined volume (or open interest) exceeds 50%. |
 | **Roll cost** | The estimated cost of moving N contracts from front to next at a given time, either through the spread book or by trading each leg separately. |
  
+---
+
+## Technical Workflow
+
+The project is organized as a reproducible pipeline:
+
+1. **Download data** — Retrieve ZN futures, calendar spread, and market statistics data from Databento.
+
+2. **Process contracts** — Identify each quarterly front/next contract pair and align observations relative to First Notice Day.
+
+3. **Build roll panel** — Combine volume, open interest, spread activity, and liquidity measures into a standardized dataset for each roll.
+
+4. **Analyze liquidity migration** — Generate summary statistics and visualizations showing how liquidity moves between contracts.
+
+5. **Model roll timing** — Fit and evaluate prediction models using roll-level out-of-sample validation.
+
+6. **Evaluate execution** — Compare estimated transaction costs from model-based timing against benchmark roll rules.
+
+Where possible, reusable data processing and modeling functions will be kept in `src/`, while `notebooks/` will primarily be used for exploration, visualization, and presentation of results.
+
 ---
 
 ## Planned Approach
