@@ -93,9 +93,9 @@ For each quarterly roll, we build a daily panel indexed by business days relativ
 
 The primary prediction target is the timing of the volume-based liquidity crossover. For each trading day \(t\), define the next-contract volume share as
 
-\[
-S_t = \frac{V^{next}_t}{V^{front}_t + V^{next}_t}.
-\]
+$$
+S_t = \frac{V^{next}_t}{V^{front}_t + V^{next}_t}
+$$
 
 The realized crossover date is defined as the first trading day on which the next contract accounts for more than 50% of combined front- and next-contract volume.
 
