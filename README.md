@@ -1,8 +1,13 @@
 # ZN Roll Liquidity: Predicting the Crossover Is Only Half the Question
 
-**Liquidity migration in 10-Year U.S. Treasury Note futures is regular, but volume crossover does not establish the best time to roll.** Across 27 quarterly ZN rolls from 2020–2026, a historical-median forecast achieves **0.263 panel observations of mean absolute error** on 19 held-out rolls. More elaborate predictors do not improve on it. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
+**The shift in trading between quarterly 10-Year U.S. Treasury Note futures contracts is highly predictable in this sample.** Across 27 ZN rolls from 2020–2026, a historical-median forecast identifies the exact crossover observation in **14 of 19 held-out rolls**, with the remaining five just one observation away. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
 
 Rolling replaces an expiring contract with the next quarterly contract. We study ZN alone to compare how positions, trading volume, and calendar-spread activity migrate, then ask whether predicting that migration helps identify favorable execution conditions.
+
+The project asks two questions:
+
+1. **Can we predict when trading moves into the next futures contract?** Specifically, when will the next contract first account for more than half of the combined trading volume in the expiring and next contracts? For example, if December trades 40,000 contracts and March trades 60,000, March has a 60% share and has crossed the threshold. We predict the timing of that switch, rather than the direction of Treasury prices.
+2. **Does predicting that switch help identify a favorable time to roll?** We compare trading activity and daily execution proxies before, at, and after crossover to assess whether the switch coincides with favorable conditions for replacing the expiring position.
 
 ## Data and the migration process
 
@@ -42,7 +47,7 @@ The initial comparison tests volume-only versus all-six ridge specifications. An
 
 ![Diagnostic errors across feature sets, ridge strengths, and decision cutoffs](docs/figures/feature_selection.png)
 
-The heatmaps show fixed-candidate diagnostics, not permission to choose the best cell retrospectively. Nested selection keeps the historical median for all 19 test rolls at both cutoffs. The grid was designed after examining this historical sample, so it remains exploratory.
+The heatmaps show how forecast accuracy changes with the inputs and regularization strength; lower values mean smaller timing errors. Selecting models using earlier rolls only achieves **0.263 observations of MAE at both cutoffs**, retaining the historical-median rule in all 19 test rolls. This supports a simple, interpretable forecast of the recurring migration schedule. The grid was designed after examining this historical sample, so it remains exploratory; individual cells should not be selected retrospectively.
 
 ![Forecast errors on the same 19 held-out rolls](docs/figures/crossover_forecasts.png)
 
@@ -53,7 +58,9 @@ The heatmaps show fixed-candidate diagnostics, not permission to choose the best
 | Ridge, six features, alpha 100 | 0.316 |
 | Training-only model selection | **0.263** |
 
-Regularization stabilizes OLS without beating the baseline. Separately, calendar-only and lagged-liquidity logistic models predict crossover within one, three, or five observations, evaluated with Brier score and log loss rather than date MAE.
+**What does an error of 0.263 mean?** For each test roll, we count how many observations separate the predicted crossover from the actual crossover, ignoring whether the prediction was early or late, then average those distances. The historical-median forecast is exact in **14 of 19 rolls (74%)** and one observation early or late in the other five, giving an average error of **5 / 19 = 0.263 observations**. This measures accuracy on the recorded observation grid, not precision to a fraction of a trading day or an intraday time.
+
+The model comparison shows that this accuracy can be achieved with a transparent historical timing rule. Regularization also improves the six-feature regression's MAE from **0.632 with OLS to 0.316 with ridge**. Separately, calendar-only and lagged-liquidity logistic models predict crossover within one, three, or five observations, evaluated with Brier score and log loss rather than date MAE.
 
 ## Could we measure execution costs instead?
 
