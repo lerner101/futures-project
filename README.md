@@ -1,6 +1,6 @@
 # ZN Roll Liquidity: Predicting the Crossover Is Only Half the Question
 
-**The shift in trading between quarterly 10-Year U.S. Treasury Note futures contracts is highly predictable in this sample.** Across 27 ZN rolls from 2020–2026, a historical-median forecast identifies the exact crossover observation in **14 of 19 held-out rolls**, with the remaining five just one observation away. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
+**The shift in trading between quarterly 10-Year U.S. Treasury Note futures contracts is highly predictable in this sample.** Across 27 ZN rolls from 2020–2026, a volume-based ridge model identifies the exact crossover observation in **14 of 19 held-out rolls**, with the remaining five just one observation away. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
 
 Rolling replaces an expiring contract with the next quarterly contract. We study ZN alone to compare how positions, trading volume, and calendar-spread activity migrate, then ask whether predicting that migration helps identify favorable execution conditions.
 
@@ -39,28 +39,31 @@ Features represent migration progress, momentum, positioning, and roll activity.
 | Next-contract OI share | Next OI / combined outright OI | Progress of position migration |
 | Three-observation OI-share change | Current OI share minus share three observations earlier | Position-transfer momentum |
 | Log spread volume | `log(1 + spread_volume)` | Roll activity, with compressed scale |
-| FND-relative index | Recorded panel offset | Calendar-only probability baseline |
+| FND-relative index | Recorded panel offset | Calendar timing for probability forecasts |
 
 Date forecasts use one actual snapshot at or before −10 and at least eight earlier, completed rolls. Within training history, features with insufficient observations or zero variance are excluded; missing values are median-imputed and predictors standardized. No outcome-derived “days until crossover” enters predictors. End-of-observation features cannot select execution on that same observation.
 
-The initial comparison tests volume-only versus all-six ridge specifications. An exploratory grid compares **three feature sets × five ridge strengths**. Chronological inner validation selects the lowest rounded-date MAE using earlier rolls only; ties favor the historical median. Cutoffs −10 and −5 are evaluated separately, without selecting between them from test performance.
+We evaluate **three feature sets × five ridge strengths**, fitting each forecast on earlier completed rolls. The −10 and −5 decision cutoffs are evaluated separately on the same 19 later rolls. Model-selection procedures and the full comparison are documented in [timing methodology](docs/issue-20-model-improvements.md).
 
-![Diagnostic errors across feature sets, ridge strengths, and decision cutoffs](docs/figures/feature_selection.png)
+## Forecast results: accuracy and practical meaning
 
-The heatmaps show how forecast accuracy changes with the inputs and regularization strength; lower values mean smaller timing errors. Selecting models using earlier rolls only achieves **0.263 observations of MAE at both cutoffs**, retaining the historical-median rule in all 19 test rolls. This supports a simple, interpretable forecast of the recurring migration schedule. The grid was designed after examining this historical sample, so it remains exploratory; individual cells should not be selected retrospectively.
+**One of the best-performing tested ridge models uses just two inputs: the next contract's volume share and its change over the last three observations.** Ridge regularization with **alpha 1,000** limits how strongly the model reacts to these inputs, helping keep forecasts stable in a small sample. The model predicts the observation when the next contract first takes more than half of combined outright trading volume.
 
-![Forecast errors on the same 19 held-out rolls](docs/figures/crossover_forecasts.png)
+| Forecast result | Snapshot at or before −10 | Snapshot at or before −5 |
+|---|---:|---:|
+| Held-out quarterly rolls | 19 | 19 |
+| Exact crossover predictions | **14 / 19 (74%)** | **14 / 19 (74%)** |
+| Predictions within one observation | **19 / 19 (100%)** | **19 / 19 (100%)** |
+| Mean absolute timing error | **0.263 observations** | **0.263 observations** |
+| Largest timing error | **1 observation** | **1 observation** |
 
-| Date forecast at −10 | MAE, panel observations |
-|---|---:|
-| Historical median | **0.263** |
-| Corrected OLS | 0.632 |
-| Ridge, six features, alpha 100 | 0.316 |
-| Training-only model selection | **0.263** |
+These columns evaluate the same 19 rolls at two forecast cutoffs, rather than 38 separate rolls. Results are from the saved [feature-grid summary](docs/tables/feature_grid_summary.csv). This specification is highlighted based on its performance in the exploratory comparison; confirmation on new rolls is still needed.
 
-**What does an error of 0.263 mean?** For each test roll, we count how many observations separate the predicted crossover from the actual crossover, ignoring whether the prediction was early or late, then average those distances. The historical-median forecast is exact in **14 of 19 rolls (74%)** and one observation early or late in the other five, giving an average error of **5 / 19 = 0.263 observations**. This measures accuracy on the recorded observation grid, not precision to a fraction of a trading day or an intraday time.
+**What does the accuracy mean?** The model picked the exact crossover observation roughly three times out of four. For the other five rolls, it was one observation early or late. Adding those five one-observation misses and dividing by 19 gives **0.263**. This is an average distance between predicted and actual crossover, measured in recorded observations; it does not mean we can predict within a quarter of a trading day or identify an intraday time.
 
-The model comparison shows that this accuracy can be achieved with a transparent historical timing rule. Regularization also improves the six-feature regression's MAE from **0.632 with OLS to 0.316 with ridge**. Separately, calendar-only and lagged-liquidity logistic models predict crossover within one, three, or five observations, evaluated with Brier score and log loss rather than date MAE.
+**What can we do with that forecast?** It provides an advance estimate of when the next contract will become the main venue for outright trading. A trader could use that estimate to plan monitoring and order preparation around a narrow migration window. The execution analysis below then asks whether favorable conditions for the roll occur before, during, or after that window. Timing accuracy alone does not establish trading-cost savings.
+
+Separately, calendar-only and lagged-liquidity logistic models estimate the probability of crossover within one, three, or five observations. Those probability forecasts use Brier score and log loss rather than the date-error measures above.
 
 ## Could we measure execution costs instead?
 
