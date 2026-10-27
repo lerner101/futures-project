@@ -1,4 +1,4 @@
-# ZN Roll Liquidity: Predicting the Crossover Is Only Half the Question
+# ZN Roll Liquidity: Predicting the Crossover
 
 **The shift in trading between quarterly 10-Year U.S. Treasury Note futures contracts is highly predictable in this sample.** Across 27 ZN rolls from 2020–2026, a volume-based ridge model identifies the exact crossover observation in **14 of 19 held-out rolls**, with the remaining five just one observation away. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
 
