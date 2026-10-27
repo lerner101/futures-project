@@ -17,6 +17,8 @@ We use **Databento CME Globex `GLBX.MDP3`** daily OHLCV and open-interest statis
 
 Open-interest crossover precedes volume crossover in **23 of 27 rolls**, coinciding in four. Volume crosses at −2 in 18 rolls, −3 in five, and −1 in four. This separates the movement of positions from the point when next-contract outright trading becomes dominant.
 
+That means positions can already be concentrated in the next contract while the front contract still attracts more daily trading.
+
 ## Why use volume crossover as the target?
 
 We define crossover as the first observation where next-contract volume exceeds **50% of combined front/next outright volume**. The share normalizes activity across rolls, and 50% marks an interpretable change in trading dominance. It is an observable research milestone; it does not identify the cheapest executable trade. OI crossover tracks positioning separately, while calendar-spread activity may better describe the roll itself. Realized-crossover alignment uses hindsight and is descriptive.
