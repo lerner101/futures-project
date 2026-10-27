@@ -1,208 +1,181 @@
-# ZN Roll Liquidity: When Should You Roll a 10-Year Treasury Futures Position?
- 
-This repository contains our team's final project: an analysis of how trading liquidity migrates from the expiring 10-Year U.S. Treasury Note futures contract (**ZN**) to the next contract during each quarterly roll, whether that migration can be predicted, and whether predicting it lowers the cost of rolling a position.
- 
-All market data comes from **Databento's CME Globex MDP 3.0 dataset (`GLBX.MDP3`)**.
- 
-> **Status:** Data preparation and prediction notebooks (01–07) are implemented. Execution backtesting remains in progress. Downloaded data and numerical results are not committed.
+# ZN Roll Liquidity: Predicting the Crossover
 
----
+**The shift in trading between quarterly 10-Year U.S. Treasury Note futures contracts is highly predictable in this sample.** Across 27 ZN rolls from 2020–2026, a volume-based ridge model identifies the exact crossover observation in **14 of 19 held-out rolls**, with the remaining five just one observation away. Open interest usually migrates earlier, and daily execution proxies often favor dates before volume crossover.
 
+Rolling replaces an expiring contract with the next quarterly contract. We study ZN alone to compare how positions, trading volume, and calendar-spread activity migrate, then ask whether predicting that migration helps identify favorable execution conditions.
 
-## Team Roles
+The project asks two questions:
 
-- **Tech Leader:** Jacob Lerner (created initial README, skeleton of files and project/README outline, and technical workflow)
-- **Communication Leader:** TBD
-- **Design Leader(s):** Zheng Guo, Christo Karahalios (Both updated project roadmap, design outline and issues)
+1. **Can we predict when trading moves into the next futures contract?** Specifically, when will the next contract first account for more than half of the combined trading volume in the expiring and next contracts? For example, if December trades 40,000 contracts and March trades 60,000, March has a 60% share and has crossed the threshold. We predict the timing of that switch, rather than the direction of Treasury prices.
+2. **Does predicting that switch help identify a favorable time to roll?** We compare trading activity and daily execution proxies before, at, and after crossover to assess whether the switch coincides with favorable conditions for replacing the expiring position.
 
----
-## Project Overview
+## Data and the migration process
 
-### Motivation
- 
-Treasury futures are physically delivered. A trader who is long a contract on **First Position Day** can be assigned delivery, so nearly every position holder moves ("rolls") into the next quarterly contract beforehand. Each March, June, September, and December, this creates a short window in which volume, open interest, and quoted liquidity shift from the front contract to the deferred contract, mostly through the calendar spread market.
- 
-The timing of that shift matters to anyone holding a futures position:
- 
-- **Roll too early,** and you trade the deferred contract or the spread while it is still thin.
-- **Roll too late,** and you trade the front contract after liquidity has left, while also approaching delivery.
+We use **Databento CME Globex `GLBX.MDP3`** daily OHLCV and open-interest statistics, requested through `ZN.FUT` for January 1, 2020–September 30, 2026. Quarterly front/next pairs produce **837 observations**, indexed −25 through +5 around each supplied First Notice Day (FND).
 
+![Volume and open-interest migration across 27 ZN rolls](docs/figures/liquidity_migration.png)
 
-### Research Questions
- 
-1. **Describe:** For every ZN quarterly roll since 2010, how and when do volume, open interest, calendar-spread activity, and bid–ask liquidity move from the front contract to the next contract?
-2. **Predict:** Using only information available on a given day, can we predict when the liquidity crossover will happen, or how far it has progressed?
-3. **Execute:** Does timing a roll with our predictions reduce transaction costs compared with simple rules, such as rolling a fixed number of days before First Notice Day or rolling at the open interest crossover?
+Open-interest crossover precedes volume crossover in **23 of 27 rolls**, coinciding in four. Volume crosses at −2 in 18 rolls, −3 in five, and −1 in four. This separates the movement of positions from the point when next-contract outright trading becomes dominant.
 
-### Scope
- 
-We deliberately study **one product: ZN**. CME products differ in calendars, delivery rules, and market structure, and handling those differences would take time away from the analysis itself. If the ZN analysis is complete, we may compare against the Ultra 10-Year (TN) or other Treasury tenors as a stretch goal.
+## Why use volume crossover as the target?
 
----
+We define crossover as the first observation where next-contract volume exceeds **50% of combined front/next outright volume**. The share normalizes activity across rolls, and 50% marks an interpretable change in trading dominance. It is an observable research milestone; it does not identify the cheapest executable trade. OI crossover tracks positioning separately, while calendar-spread activity may better describe the roll itself. Realized-crossover alignment uses hindsight and is descriptive.
 
-## Key Concepts
- 
-| Term | Meaning in this project |
-|---|---|
-| **Front contract** | The expiring quarterly ZN contract (e.g., ZNZ6). |
-| **Next contract** | The following quarterly contract (e.g., ZNH7). |
-| **Calendar spread** | A CME-listed instrument that trades the front and next contracts together (e.g., `ZNZ6-ZNH7`). Most roll volume trades here. |
-| **First Notice Day (FND)** | The last business day of the month before the contract month. This is our main time anchor: every roll is measured in **business days relative to FND**. |
-| **First Position Day** | Two business days before the first business day of the contract month. Longs holding past this point may be assigned delivery. |
-| **Crossover** | The first day on which the next contract's share of combined volume (or open interest) exceeds 50%. |
-| **Roll cost** | The estimated cost of moving N contracts from front to next at a given time, either through the spread book or by trading each leg separately. |
- 
----
+## How sharp is the crossover?
 
-## Technical Workflow
+We fit each roll's volume and OI shares with a logistic curve, with midpoint τ and steepness k. The fitted 20%–80% width is **2 ln(4)/k**: median widths are approximately **3.1 observations for volume** and **3.5 for OI**. The transition is concentrated, although daily data cannot resolve its intraday shape. These full-window fits describe migration rather than predict it.
 
-The project is organized as a reproducible pipeline:
+![Centered logistic curves and per-roll transition widths](docs/figures/crossover_sharpness.png)
 
-1. **Download data** — Retrieve ZN futures, calendar spread, and market statistics data from Databento.
+## Feature selection and forecasting methodology
 
-2. **Process contracts** — Identify each quarterly front/next contract pair and align observations relative to First Notice Day.
+Features represent migration progress, momentum, positioning, and roll activity. We use a small, interpretable set because there are only 27 rolls; additional predictors can fit historical noise.
 
-3. **Build roll panel** — Combine volume, open interest, spread activity, and liquidity measures into a standardized dataset for each roll.
-
-4. **Analyze liquidity migration** — Generate summary statistics and visualizations showing how liquidity moves between contracts.
-
-5. **Model roll timing** — Fit and evaluate prediction models using roll-level out-of-sample validation.
-
-6. **Evaluate execution** — Compare estimated transaction costs from model-based timing against benchmark roll rules.
-
-Where possible, reusable data processing and modeling functions will be kept in `src/`, while `notebooks/` will primarily be used for exploration, visualization, and presentation of results.
-
----
-
-## Planned Approach
- 
-### 1. Data Collection
- 
-All data is pulled from Databento's `GLBX.MDP3` dataset using the `databento` Python client.
- 
-| Databento schema | Used for | History |
+| Feature | Construction | Economic role |
 |---|---|---|
-| `definition` | Instrument IDs, expirations, spread legs, tick sizes | Full |
-| `ohlcv-1d` | Daily volume and prices for outrights and spreads | Full (2010 onward) |
-| `ohlcv-1h` / `ohlcv-1m` | Intraday volume profile inside roll windows | Full, roll windows only |
-| `statistics` | Daily open interest and settlement prices | Full |
-| `bbo-1m` / `tbbo` / `mbp-1` | Top-of-book bid–ask and size during roll windows | As far back as our license allows |
-| `mbp-10` | Full depth for a single-roll case study | Most recent one to two months only (license limit) |
- 
-Symbols are requested by parent (`ZN.FUT`), which returns both outright contracts and calendar spreads. Databento's continuous contracts `ZN.v.0` (volume-ranked) and `ZN.n.0` (open interest-ranked) serve as a reference roll schedule.
- 
-Raw data is cached locally under `data/raw/` and is **not committed** to the repository.
- 
-### 2. Roll Panel
- 
-For each quarterly roll, we build a daily panel indexed by business days relative to FND (about −20 to +5). It includes:
- 
-- Front and next contract volume and open interest
-- Next contract share of total volume and of total open interest
-- Calendar spread price, volume, and bid–ask spread
-- Bid–ask spread and top-of-book size for each outright
-- Business days to FND and to last trading day
-### 3. Exploratory Analysis and Visualization
- 
-- All rolls overlaid on one chart: next contract share vs. days to FND
-- Crossover timing by year, compared against Databento's continuous-contract roll dates
-- Intraday volume and spread activity around the crossover
-### 4. Prediction Models
+| Next-contract volume share | Next volume / combined outright volume | Progress toward trading dominance |
+| Three-observation volume-share change | Current share minus share three observations earlier | Recent migration momentum |
+| Five-observation volume-share change | Current share minus share five observations earlier | Broader migration momentum |
+| Next-contract OI share | Next OI / combined outright OI | Progress of position migration |
+| Three-observation OI-share change | Current OI share minus share three observations earlier | Position-transfer momentum |
+| Log spread volume | `log(1 + spread_volume)` | Roll activity, with compressed scale |
+| FND-relative index | Recorded panel offset | Calendar timing for probability forecasts |
 
-#### Prediction Target
+Date forecasts use one actual snapshot at or before −10 and at least eight earlier, completed rolls. Within training history, features with insufficient observations or zero variance are excluded; missing values are median-imputed and predictors standardized. No outcome-derived “days until crossover” enters predictors. End-of-observation features cannot select execution on that same observation.
 
-The primary prediction target is the timing of the volume-based liquidity crossover. For each trading day \(t\), define the next-contract volume share as
+We evaluate **three feature sets × five ridge strengths**, fitting each forecast on earlier completed rolls. The −10 and −5 decision cutoffs are evaluated separately on the same 19 later rolls. Model-selection procedures and the full comparison are documented in [timing methodology](docs/issue-20-model-improvements.md).
 
-$$
-S_t = \frac{V^{next}_t}{V^{front}_t + V^{next}_t}
-$$
+## Forecast results: accuracy and practical meaning
 
-The realized crossover date is defined as the first trading day on which the next contract accounts for more than 50% of combined front- and next-contract volume.
+**One of the best-performing tested ridge models uses just two inputs: the next contract's volume share and its change over the last three observations.** Ridge regularization with **alpha 1,000** limits how strongly the model reacts to these inputs, helping keep forecasts stable in a small sample. The model predicts the observation when the next contract first takes more than half of combined outright trading volume.
 
-For predictive modeling, the problem is formulated dynamically. On each trading day before the realized crossover, the model estimates the probability that the crossover will occur within the next \(k\) business days using only information available as of that date.
+| Forecast result | Snapshot at or before −10 | Snapshot at or before −5 |
+|---|---:|---:|
+| Held-out quarterly rolls | 19 | 19 |
+| Exact crossover predictions | **14 / 19 (74%)** | **14 / 19 (74%)** |
+| Predictions within one observation | **19 / 19 (100%)** | **19 / 19 (100%)** |
+| Mean absolute timing error | **0.263 observations** | **0.263 observations** |
+| Largest timing error | **1 observation** | **1 observation** |
 
-Open-interest crossover is treated separately as a secondary liquidity signal and benchmark rather than being combined with the primary volume-based target.
+These columns evaluate the same 19 rolls at two forecast cutoffs, rather than 38 separate rolls. Results are from the saved [feature-grid summary](docs/tables/feature_grid_summary.csv). This specification is highlighted based on its performance in the exploratory comparison; confirmation on new rolls is still needed.
 
-#### Models
- 
-Simple baselines come first, because the calendar alone likely explains most of the roll timing:
- 
-- **Baselines:** roll a fixed N business days before FND; roll at the open interest crossover; roll on Databento's `ZN.v.0` switch date
-- **Bayesian hierarchical logistic curve:** each roll's volume-share path is modeled as an S-curve, with a midpoint and steepness drawn from a shared distribution across rolls
-- **Discrete-time hazard / survival model:** the probability that the crossover happens today, given it has not happened yet
-- **Gradient-boosted trees with quantile loss:** next-day liquidity and bad-case roll cost
-Every model is validated **by roll** (leave-one-roll-out or walk-forward), never by randomly shuffling days, so that information from a single roll cannot appear in both training and test data.
- 
-### 5. Execution Backtest and Fat-Tail Evaluation
- 
-We compare model-timed rolls against the baselines by the **distribution of roll costs**, not by how accurately each method predicts the crossover date. Because the sample is about 65 rolls and trading costs can be heavy-tailed, the evaluation draws on N. N. Taleb's *Statistical Consequences of Fat Tails*:
- 
-- Tail diagnostics on roll-window data: kurtosis under aggregation, maximum-to-sum (MS) plots, and the kappa metric
-- Mean absolute deviation and upper quantiles of cost reported alongside averages
-- An estimate of how many rolls are needed before a difference in average cost can be trusted
-- A check of whether a handful of stressed rolls drive any measured improvement
----
- 
-## Expected Outputs
- 
-- A reproducible pipeline that downloads ZN data from Databento and builds the roll panel
-- Figures describing liquidity migration across every roll from 2010 to 2026
-- Fitted prediction models with roll-level out-of-sample results
-- A roll-cost comparison table: model-timed vs. baseline roll rules
-- A short written summary of findings in `results/`
----
+**What does the accuracy mean?** The model picked the exact crossover observation roughly three times out of four. For the other five rolls, it was one observation early or late. Adding those five one-observation misses and dividing by 19 gives **0.263**. This is an average distance between predicted and actual crossover, measured in recorded observations; it does not mean we can predict within a quarter of a trading day or identify an intraday time.
 
+**What can we do with that forecast?** It provides an advance estimate of when the next contract will become the main venue for outright trading. A trader could use that estimate to plan monitoring and order preparation around a narrow migration window. The execution analysis below then asks whether favorable conditions for the roll occur before, during, or after that window. Timing accuracy alone does not establish trading-cost savings.
 
-## Repository Structure
+Separately, calendar-only and lagged-liquidity logistic models estimate the probability of crossover within one, three, or five observations. Those probability forecasts use Brier score and log loss rather than the date-error measures above.
 
-```text
-├── data/          # Raw and processed data
-├── notebooks/     # Exploratory analysis and development
-├── src/           # Project source code
-├── results/       # Figures, tables, and other outputs
-├── README.md      # Project description and instructions
-└── requirements.txt
-```
+## Could we measure execution costs instead?
 
-## Running the Project
+Yes: observed calendar-spread bid/ask quotes and available size would support a more direct execution comparison; depth would be needed to assess larger positions. Our downloaded data contains daily prices, volume, and OI, so this project measures **proxies**, not actual spreads, fills, or slippage.
 
-For the corrected crossover timing comparison from Issue #20, run
-`python -m src.timing_model` after generating the roll panel with notebook 02.
-Alternatively, open `notebooks/09_improve_crossover_timing.ipynb` in Jupyter
-and run all cells to view the comparisons directly in the notebook.
-This uses existing data without downloading anything and writes comparisons,
-a date audit, and a figure under `results/issue-20/`. The historical-median
-baseline remains preferred on the current sample. See
-[model comparison and limitations](docs/issue-20-model-improvements.md).
+| Available measure | Definition | What it cannot establish |
+|---|---|---|
+| Daily half-range | Half of spread high minus low | The executable bid/ask spread |
+| Roll-style half-spread | Square root of negative trailing price-change autocovariance; missing otherwise | Observed costs; coverage varies |
+| Spread activity share | Spread volume / (front + next + spread volume) | Available quoted size or capacity |
+| Price-movement / volume | Absolute spread-price change × 100,000 / spread volume | Causal price impact of a trade |
 
-Use Python 3.10+ and run these commands from the repository root:
+![Activity and execution proxies around realized volume crossover](docs/figures/crossover_event_conditions.png)
+
+Calendar-spread activity is strongest before crossover, while several proxies deteriorate near or after it. Bands show cross-roll dispersion; observation counts expose incomplete coverage.
+
+![Execution proxies on matching quarterly rolls](docs/figures/execution_conditions.png)
+
+Fixed −5 has the lowest median half-range; −3 has the highest median spread-activity share among tested schedules. Other proxy rankings depend on matching the available rolls. This supports questioning crossover as an execution objective, without establishing an optimal date or cost saving.
+
+## Interpretation and limits
+
+The inherited index includes **140 Sunday-labeled rows**, rather than verified CME sessions. Original event/publication timestamps were discarded, leaving holiday alignment and OI availability unresolved. Durations therefore use **panel observations**. The sample is small and repeatedly explored. Session validation and a limited quote-data study are needed before translating these descriptive findings into an execution recommendation.
+
+## How to reproduce
+
+### 1. Install dependencies
+
+Use Python 3.10+ from the repository root:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements-workflow.txt
-export DATABENTO_API_KEY=...  # Windows PowerShell: $env:DATABENTO_API_KEY="..."
+source .venv/bin/activate
+python -m pip install -r requirements-workflow.txt
+```
+
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
+The workflow dependencies include the model packages and SciPy through
+scikit-learn. Raw market data is not committed; a fresh download requires a
+Databento account with access to `GLBX.MDP3` and may incur charges.
+
+### 2. Download and prepare the data
+
+```bash
+export DATABENTO_API_KEY="your_key_here"
 python scripts/run_pipeline.py --dry-run
 python scripts/run_pipeline.py
 ```
 
-The full run executes notebooks 01 through 07 in order, always using
-`notebooks/` as the working directory. Notebook 01 downloads historical
-Databento data and may incur charges; check dataset access and estimated costs
-before running it. Data is cached in the git-ignored `data/raw/` and
-`data/processed/` directories.
-
-To reuse downloaded raw data without calling Databento again:
+On PowerShell, set the key with `$env:DATABENTO_API_KEY="your_key_here"`.
+Notebook 01 requests the fixed 2020–2026 window and writes raw Parquet files to
+`data/raw/`. It downloads again when rerun. To reuse those files without
+calling Databento:
 
 ```bash
 python scripts/run_pipeline.py --start-at 2
 ```
 
-To run a smaller section, use `--start-at N --stop-at M` (1 through 7).
-Later stages require the previous stages' Parquet outputs. The existing data
-notebook covers 2020–2026, not the longer 2010–2026 span proposed above.
-The workflow has not yet been validated against a full downloaded dataset.
+The runner executes notebooks 01–06 and `07_predict_crossover.ipynb`, in that
+order, with `notebooks/` as the working directory. It creates processed data
+and probability-prediction CSVs in `data/processed/`. Notebook outputs are not
+saved back by the runner; open and run individual notebooks to view their
+inline charts. The download itself has not been repeated for this README revision.
 
-## Project Status
+### 3. Reproduce this README's figures and tables
 
-**Current stage:** Notebooks 01–07 implemented. Predictive evaluation is ready for data validation; execution-cost analysis remains open.
+After notebook 02 has produced `data/processed/zn_roll_panel.parquet`:
+
+```bash
+python scripts/build_readme_figures.py
+```
+
+This offline command rebuilds the standardized panel with
+`07_build_standardized_roll_panel.ipynb`, executes
+`10_analyze_crossover_geometry_and_costs.ipynb`, and runs the shared timing
+comparison and exploratory nested feature grid. It regenerates the six figures in `docs/figures/`
+and their supporting CSVs in `docs/tables/`. Intermediate geometry outputs
+are in `results/crossover_geometry/`; timing predictions, date audit,
+configuration, sensitivity tables, and report are in `results/issue-20/`.
+The feature-grid diagnostics and per-roll selections are in
+`results/issue-20/grid-search/`; copies of the summary and selections are
+included in `docs/tables/` alongside the event-time conditions.
+These intermediate directories are git-ignored. The README figures were
+regenerated from the cached 27-roll dataset for this revision.
+
+### 4. Explore the remaining analyses
+
+Run all cells of `notebooks/08_test_roll_timing_costs.ipynb` after the pipeline
+and standardized-panel step above to compare forecast-timed execution proxies
+against benchmark schedules. Notebook 09 displays the timing comparisons and
+exploratory extensions; the same calculations are available from the root:
+
+```bash
+python -m src.timing_model
+python -m src.timing_experiments
+python -m src.timing_grid_search
+python -m unittest discover -s tests -v
+```
+
+See [timing methodology and limitations](docs/issue-20-model-improvements.md)
+and [probability-model documentation](docs/issue-7-model.md) for settings and
+interpretation. Probability scores and date MAE answer different questions.
+
+### Repository guide
+
+| Path | Contents |
+|---|---|
+| `notebooks/01`–`06` | Data collection, cleaning, validation, migration, events, and indicators |
+| `notebooks/07_predict_crossover.ipynb` | Probability-model evaluation |
+| `notebooks/07_build_standardized_roll_panel.ipynb` | Prices and execution proxies |
+| `notebooks/08`–`10` | Timing costs, forecast comparisons, and migration geometry |
+| `src/` | Reusable prediction and chronological validation code |
+| `docs/figures/`, `docs/tables/` | Committed README evidence |
+| `scripts/`, `tests/` | Execution helpers and validation |
+| `data/`, `results/` | Local market data and generated research outputs |
